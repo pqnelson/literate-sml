@@ -1,0 +1,331 @@
+\nwfilename{nw/tmp.nw}\nwbegindocs{0}% -*- mode: poly-noweb; noweb-code-mode: sml-mode; -*-% ===> this file was generated automatically by noweave --- better not edit it
+
+\chapter{Unit Testing}
+
+As we program, it is useful to write down ``companion code'' which gives
+example uses of what we're trying to implement. This can be used to
+\emph{test} the code we're implementing, to make sure we're ``doing what
+we think we're doing''. Before we get to the matter of \emph{how to
+write unit tests}, we first need a way to write unit tests (which
+programmers call a ``unit-testing framework'').
+
+We begin by implementing a unit-testing framework. This requires having
+an {\Tt{}\nwlinkedidentq{assert}{NW4EbhvV-2iEgXD-1}\ :\ string\ ->\ bool\ ->\ unit\nwendquote} function to check if something
+has worked as expected (the second parameter will be {\Tt{}true\nwendquote} upon success).
+Failure raises a new exception.
+
+We will organize tests into a composite pattern, consisting of
+individual assertions wrapped in a {\Tt{}\nwlinkedidentq{TestCase}{NW4EbhvV-4YRS1G-1}\nwendquote} and a collection of
+tests bundled together in a {\Tt{}\nwlinkedidentq{TestSuite}{NW4EbhvV-4YRS1G-1}\nwendquote}.
+
+\nwenddocs{}\nwbegincode{1}\sublabel{NW4EbhvV-kKwlF-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-kKwlF-1}}}\moddef{xunit.sml~{\nwtagstyle{}\subpageref{NW4EbhvV-kKwlF-1}}}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\LA{}Define \code{}assert\edoc{}~{\nwtagstyle{}\subpageref{NW4EbhvV-2iEgXD-1}}\RA{}
+\LA{}Composite test data pattern~{\nwtagstyle{}\subpageref{NW4EbhvV-4YRS1G-1}}\RA{}
+\LA{}Define test result data type~{\nwtagstyle{}\subpageref{NW4EbhvV-4L7MKl-1}}\RA{}
+\LA{}Run tests and produce results~{\nwtagstyle{}\subpageref{NW4EbhvV-GInkH-1}}\RA{}
+\LA{}Print test results to the terminal~{\nwtagstyle{}\subpageref{NW4EbhvV-21Krqt-1}}\RA{}
+\LA{}Test suite DSL code~{\nwtagstyle{}\subpageref{NW4EbhvV-1C3sOO-1}}\RA{}
+\nwnotused{xunit.sml}\nwendcode{}\nwbegindocs{2}\nwdocspar
+
+We will want to write unit tests, organized into ``folders'' or
+\emph{test suites}. Each unit test contains one assertion, which checks
+that some condition is true. Some example of simple unit tests of
+arithmetic:
+
+\begin{sml}
+(* Signatures for the constructors of test suites and unit tests:
+  
+  suite : string -> Test list -> Test
+  test : string -> (unit -> unit) -> Test *)
+val ex_tests
+= suite "Arithmetic Tests"
+        [test "Arithmetic test 1" (fn () => assert "1+1=2" (1+1=2)),
+         test "Arithmetic test 2" (fn () => assert "1+1=3" (1+1=3))];
+\end{sml}
+
+The {\Tt{}\nwlinkedidentq{assert}{NW4EbhvV-2iEgXD-1}\nwendquote} function takes a label (string) and a Boolean value,
+where ``true'' reflects the test does what we expect and ``fail''
+reflects\dots well, the test failed. Upon failure, we will raise an
+exception for the testing system to catch and interpret as a test failure.
+
+Although we could \emph{reuse} the {\Tt{}Fail\nwendquote} exception, this may also
+cause confusion if the code being tested raises a {\Tt{}Fail\nwendquote} exception to
+handle particular situations. This leads us to implement our own
+{\Tt{}\nwlinkedidentq{AssertionFailure}{NW4EbhvV-2iEgXD-1}\nwendquote} exception. 
+
+\nwenddocs{}\nwbegincode{3}\sublabel{NW4EbhvV-2iEgXD-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-2iEgXD-1}}}\moddef{Define \code{}assert\edoc{}~{\nwtagstyle{}\subpageref{NW4EbhvV-2iEgXD-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-kKwlF-1}}\nwenddeflinemarkup
+exception \nwlinkedidentc{AssertionFailure}{NW4EbhvV-2iEgXD-1} of string;
+
+fun \nwlinkedidentc{assert}{NW4EbhvV-2iEgXD-1} (msg : string) (is_success : bool) : unit =
+    if is_success then () else raise \nwlinkedidentc{AssertionFailure}{NW4EbhvV-2iEgXD-1} msg;
+\nwindexdefn{\nwixident{AssertionFailure}}{AssertionFailure}{NW4EbhvV-2iEgXD-1}\nwindexdefn{\nwixident{assert}}{assert}{NW4EbhvV-2iEgXD-1}\eatline
+\nwused{\\{NW4EbhvV-kKwlF-1}}\nwidentdefs{\\{{\nwixident{assert}}{assert}}\\{{\nwixident{AssertionFailure}}{AssertionFailure}}}\nwendcode{}\nwbegindocs{4}\nwdocspar
+We use a composite design pattern when implementing {\Tt{}\nwlinkedidentq{Test}{NW4EbhvV-4YRS1G-1}\nwendquote}s. 
+
+Now, unit tests are {\Tt{}\nwlinkedidentq{TestCase}{NW4EbhvV-4YRS1G-1}\nwendquote} instances. An individual test case will
+take a label (a {\Tt{}string\nwendquote}) and a delayed test procedure ({\Tt{}unit\ ->\ unit\nwendquote}).
+
+A collection of {\Tt{}\nwlinkedidentq{Test}{NW4EbhvV-4YRS1G-1}\nwendquote} instances are collected in a {\Tt{}\nwlinkedidentq{TestSuite}{NW4EbhvV-4YRS1G-1}\nwendquote}.
+
+\nwenddocs{}\nwbegincode{5}\sublabel{NW4EbhvV-4YRS1G-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-4YRS1G-1}}}\moddef{Composite test data pattern~{\nwtagstyle{}\subpageref{NW4EbhvV-4YRS1G-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-kKwlF-1}}\nwenddeflinemarkup
+datatype \nwlinkedidentc{Test}{NW4EbhvV-4YRS1G-1} = \nwlinkedidentc{TestCase}{NW4EbhvV-4YRS1G-1} of string*(unit -> unit)
+              | \nwlinkedidentc{TestSuite}{NW4EbhvV-4YRS1G-1} of string*(\nwlinkedidentc{Test}{NW4EbhvV-4YRS1G-1} list);
+\nwindexdefn{\nwixident{Test}}{Test}{NW4EbhvV-4YRS1G-1}\nwindexdefn{\nwixident{TestCase}}{TestCase}{NW4EbhvV-4YRS1G-1}\nwindexdefn{\nwixident{TestSuite}}{TestSuite}{NW4EbhvV-4YRS1G-1}\eatline
+\nwused{\\{NW4EbhvV-kKwlF-1}}\nwidentdefs{\\{{\nwixident{Test}}{Test}}\\{{\nwixident{TestCase}}{TestCase}}\\{{\nwixident{TestSuite}}{TestSuite}}}\nwendcode{}\nwbegindocs{6}\nwdocspar
+When we run unit tests, we either deal with a single assertion (a
+{\Tt{}\nwlinkedidentq{TestCase}{NW4EbhvV-4YRS1G-1}\nwendquote}) or a sequence of tests. For now, we will not print
+any information concerning success: only failure or exceptions require
+the user's attention. We will give some pseuodocode intuition of what
+this would look like:
+
+\begin{sml}
+(* run : Test -> unit *)
+fun run (TestCase (name, assertion))
+    = (assertion()
+       handle AssertionFailure msg => print (concat ["Test ",
+                                                     name,
+                                                     " failed: ",
+                                                     msg])
+            | e => print (concat ["Unhandled exception in test",
+                                  name,
+                                  ": ",
+                                  exnMessage e]))
+  | run (TestSuite (name, tests)) = app run tests;
+\end{sml}
+
+We really want to have {\Tt{}run\nwendquote} produce a data structure storing the
+results of each test. Towards that end, we need a composite design
+pattern for the test results.
+
+An individual test can succeed, fail, or encounter an unhandled
+exception.
+
+The {\Tt{}\nwlinkedidentq{TestResult}{NW4EbhvV-4L7MKl-1}\nwendquote} data type is then just a composite design pattern,
+whose nodes are just results of individual unit tests. We will store the
+amount of time it took to run the unit test (or test suite), the name of
+the unit test (or test) suite being executed, and the outcome(s).
+
+\nwenddocs{}\nwbegincode{7}\sublabel{NW4EbhvV-4L7MKl-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-4L7MKl-1}}}\moddef{Define test result data type~{\nwtagstyle{}\subpageref{NW4EbhvV-4L7MKl-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-kKwlF-1}}\nwenddeflinemarkup
+(* Extend the framework to handle printing \nwlinkedidentc{test}{NW4EbhvV-4ZJPeu-1} outcomes. *)
+datatype \nwlinkedidentc{TestOutcome}{NW4EbhvV-4L7MKl-1} = TestSuccess
+                     | TestFail of string
+                     | TestException of exn;
+
+datatype \nwlinkedidentc{TestResult}{NW4EbhvV-4L7MKl-1} = \nwlinkedidentc{ResultCase}{NW4EbhvV-4L7MKl-1} of string*Time.time*\nwlinkedidentc{TestOutcome}{NW4EbhvV-4L7MKl-1}
+                    | \nwlinkedidentc{ResultSuite}{NW4EbhvV-4L7MKl-1} of string*Time.time*(\nwlinkedidentc{TestResult}{NW4EbhvV-4L7MKl-1} list);
+\nwindexdefn{\nwixident{TestOutcome}}{TestOutcome}{NW4EbhvV-4L7MKl-1}\nwindexdefn{\nwixident{TestResult}}{TestResult}{NW4EbhvV-4L7MKl-1}\nwindexdefn{\nwixident{ResultCase}}{ResultCase}{NW4EbhvV-4L7MKl-1}\nwindexdefn{\nwixident{ResultSuite}}{ResultSuite}{NW4EbhvV-4L7MKl-1}\eatline
+\nwused{\\{NW4EbhvV-kKwlF-1}}\nwidentdefs{\\{{\nwixident{ResultCase}}{ResultCase}}\\{{\nwixident{ResultSuite}}{ResultSuite}}\\{{\nwixident{TestOutcome}}{TestOutcome}}\\{{\nwixident{TestResult}}{TestResult}}}\nwidentuses{\\{{\nwixident{test}}{test}}}\nwindexuse{\nwixident{test}}{test}{NW4EbhvV-4L7MKl-1}\nwendcode{}\nwbegindocs{8}\nwdocspar
+Running unit tests will then produce a {\Tt{}\nwlinkedidentq{TestResult}{NW4EbhvV-4L7MKl-1}\nwendquote} instance storing
+the germane information.
+
+\nwenddocs{}\nwbegincode{9}\sublabel{NW4EbhvV-GInkH-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-GInkH-1}}}\moddef{Run tests and produce results~{\nwtagstyle{}\subpageref{NW4EbhvV-GInkH-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-kKwlF-1}}\nwenddeflinemarkup
+(* \nwlinkedidentc{run_test}{NW4EbhvV-GInkH-1} : \nwlinkedidentc{Test}{NW4EbhvV-4YRS1G-1} -> \nwlinkedidentc{TestResult}{NW4EbhvV-4L7MKl-1} *)
+fun \nwlinkedidentc{run_test}{NW4EbhvV-GInkH-1} (\nwlinkedidentc{test}{NW4EbhvV-4ZJPeu-1} : \nwlinkedidentc{Test}{NW4EbhvV-4YRS1G-1}) : \nwlinkedidentc{TestResult}{NW4EbhvV-4L7MKl-1} =
+let
+  val start = Time.now()
+in
+  case \nwlinkedidentc{test}{NW4EbhvV-4ZJPeu-1} of
+      \LA{}Run an individual unit test~{\nwtagstyle{}\subpageref{NW4EbhvV-3DPdJC-1}}\RA{}
+    | \LA{}Run a test suite~{\nwtagstyle{}\subpageref{NW4EbhvV-47ZbGR-1}}\RA{}
+end;
+\nwindexdefn{\nwixident{run{\_}test}}{run:untest}{NW4EbhvV-GInkH-1}\eatline
+\nwused{\\{NW4EbhvV-kKwlF-1}}\nwidentdefs{\\{{\nwixident{run{\_}test}}{run:untest}}}\nwidentuses{\\{{\nwixident{Test}}{Test}}\\{{\nwixident{test}}{test}}\\{{\nwixident{TestResult}}{TestResult}}}\nwindexuse{\nwixident{Test}}{Test}{NW4EbhvV-GInkH-1}\nwindexuse{\nwixident{test}}{test}{NW4EbhvV-GInkH-1}\nwindexuse{\nwixident{TestResult}}{TestResult}{NW4EbhvV-GInkH-1}\nwendcode{}\nwbegindocs{10}\nwdocspar
+If the assertion runs as expected, we record a {\Tt{}TestSuccess\nwendquote} for the
+{\Tt{}case{\_}name\nwendquote}, along with how long it took.
+However, if an {\Tt{}\nwlinkedidentq{AssertionFailure}{NW4EbhvV-2iEgXD-1}\nwendquote} is raised, then the test failed, and
+we record a failure for the {\Tt{}case{\_}name\nwendquote}.
+Worse, if any other exception occurs, we should record something
+exceptional has happened (and store the details of the exception raised).
+
+\nwenddocs{}\nwbegincode{11}\sublabel{NW4EbhvV-3DPdJC-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-3DPdJC-1}}}\moddef{Run an individual unit test~{\nwtagstyle{}\subpageref{NW4EbhvV-3DPdJC-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-GInkH-1}}\nwenddeflinemarkup
+(\nwlinkedidentc{TestCase}{NW4EbhvV-4YRS1G-1} (case_name, assertion)) =>
+((assertion();
+  \nwlinkedidentc{ResultCase}{NW4EbhvV-4L7MKl-1} (case_name, (Time.-)(Time.now(), start), TestSuccess))
+ handle \nwlinkedidentc{AssertionFailure}{NW4EbhvV-2iEgXD-1} msg => \nwlinkedidentc{ResultCase}{NW4EbhvV-4L7MKl-1} (case_name,
+                                            (Time.-)(Time.now(), start),
+                                            TestFail msg)
+      | e => \nwlinkedidentc{ResultCase}{NW4EbhvV-4L7MKl-1} (case_name,
+                         (Time.-)(Time.now(), start),
+                         TestException e))
+\nwused{\\{NW4EbhvV-GInkH-1}}\nwidentuses{\\{{\nwixident{AssertionFailure}}{AssertionFailure}}\\{{\nwixident{ResultCase}}{ResultCase}}\\{{\nwixident{TestCase}}{TestCase}}}\nwindexuse{\nwixident{AssertionFailure}}{AssertionFailure}{NW4EbhvV-3DPdJC-1}\nwindexuse{\nwixident{ResultCase}}{ResultCase}{NW4EbhvV-3DPdJC-1}\nwindexuse{\nwixident{TestCase}}{TestCase}{NW4EbhvV-3DPdJC-1}\nwendcode{}\nwbegindocs{12}\nwdocspar
+
+Running all the tests on a test suite amounts to iterating through each
+element in the suite, and running each element recursively. We use the
+fact that Standard ML is call-by-value to have {\Tt{}results\nwendquote} be computed
+first, and upon completion the elapsed time interval {\Tt{}dt\nwendquote} is determined.
+Thus a test suite's results will include the time it took to run every
+``descendent'' test contained within it.
+
+\nwenddocs{}\nwbegincode{13}\sublabel{NW4EbhvV-47ZbGR-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-47ZbGR-1}}}\moddef{Run a test suite~{\nwtagstyle{}\subpageref{NW4EbhvV-47ZbGR-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-GInkH-1}}\nwenddeflinemarkup
+(\nwlinkedidentc{TestSuite}{NW4EbhvV-4YRS1G-1} (suite_name, tests)) =>
+(let
+    val results = map \nwlinkedidentc{run_test}{NW4EbhvV-GInkH-1} tests
+    val dt = (Time.-)(Time.now(), start)
+in
+    \nwlinkedidentc{ResultSuite}{NW4EbhvV-4L7MKl-1} (suite_name, dt, results)
+end)
+\nwused{\\{NW4EbhvV-GInkH-1}}\nwidentuses{\\{{\nwixident{ResultSuite}}{ResultSuite}}\\{{\nwixident{run{\_}test}}{run:untest}}\\{{\nwixident{TestSuite}}{TestSuite}}}\nwindexuse{\nwixident{ResultSuite}}{ResultSuite}{NW4EbhvV-47ZbGR-1}\nwindexuse{\nwixident{run{\_}test}}{run:untest}{NW4EbhvV-47ZbGR-1}\nwindexuse{\nwixident{TestSuite}}{TestSuite}{NW4EbhvV-47ZbGR-1}\nwendcode{}\nwbegindocs{14}\nwdocspar
+
+We can then implement a Reporter, which will report and/or record
+information concerning the test results. For our purposes, we only need
+to print out to the screen the test results. Again, since we're
+processing a composite data pattern, we can implement this as two cases:
+one for the leafs in the collection, another for the test suites.
+
+Later it may be useful to store this information in a separate file
+(Java routinely uses XML files to store results from running unit
+tests).
+There are other possibilities, but for now we will just print the tests
+to the terminal.
+
+It has become conventional to report time intervals to microseconds. We
+do this with the following function. The {\Tt{}Time.fmt\nwendquote} will format the
+time interval to {\Tt{}n\nwendquote} digits after the decimal point, in units of seconds.
+
+\nwenddocs{}\nwbegincode{15}\sublabel{NW4EbhvV-21Krqt-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-21Krqt-1}}}\moddef{Print test results to the terminal~{\nwtagstyle{}\subpageref{NW4EbhvV-21Krqt-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-kKwlF-1}}\nwenddeflinemarkup
+(* Print the results to the terminal.
+
+    \nwlinkedidentc{report_results}{NW4EbhvV-21Krqt-1} : \nwlinkedidentc{TestResult}{NW4EbhvV-4L7MKl-1} -> unit *)
+fun \nwlinkedidentc{report_results}{NW4EbhvV-21Krqt-1} (\nwlinkedidentc{ResultCase}{NW4EbhvV-4L7MKl-1} (name,dt,outcome)) =
+    \LA{}Print the result for a test case to the terminal~{\nwtagstyle{}\subpageref{NW4EbhvV-EoKaK-1}}\RA{}
+  | \nwlinkedidentc{report_results}{NW4EbhvV-21Krqt-1} (\nwlinkedidentc{ResultSuite}{NW4EbhvV-4L7MKl-1} (name,dt,outcomes)) =
+    (print (concat ["Suite ", name, " (", Time.fmt 3 dt, ")\\n"]);
+     app \nwlinkedidentc{report_results}{NW4EbhvV-21Krqt-1} outcomes);
+\nwindexdefn{\nwixident{report{\_}results}}{report:unresults}{NW4EbhvV-21Krqt-1}\eatline
+\nwused{\\{NW4EbhvV-kKwlF-1}}\nwidentdefs{\\{{\nwixident{report{\_}results}}{report:unresults}}}\nwidentuses{\\{{\nwixident{ResultCase}}{ResultCase}}\\{{\nwixident{ResultSuite}}{ResultSuite}}\\{{\nwixident{TestResult}}{TestResult}}}\nwindexuse{\nwixident{ResultCase}}{ResultCase}{NW4EbhvV-21Krqt-1}\nwindexuse{\nwixident{ResultSuite}}{ResultSuite}{NW4EbhvV-21Krqt-1}\nwindexuse{\nwixident{TestResult}}{TestResult}{NW4EbhvV-21Krqt-1}\nwendcode{}\nwbegindocs{16}\nwdocspar
+The outcome for an individual unit test is a success, failure, or an exception.
+Usually, we only care about failures, but it is good to know that a test
+has been executed.
+
+\nwenddocs{}\nwbegincode{17}\sublabel{NW4EbhvV-EoKaK-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-EoKaK-1}}}\moddef{Print the result for a test case to the terminal~{\nwtagstyle{}\subpageref{NW4EbhvV-EoKaK-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-21Krqt-1}}\nwenddeflinemarkup
+(case outcome of
+     TestSuccess => print (concat ["\nwlinkedidentc{Test}{NW4EbhvV-4YRS1G-1} ",
+                                   name,
+                                   " (",
+                                   Time.fmt 3 dt,
+                                   ")",
+                                   ": SUCCESS\\n"])
+   | (TestFail msg) => print (concat ["\nwlinkedidentc{Test}{NW4EbhvV-4YRS1G-1} ",
+                                      name,
+                                      " (",
+                                      Time.fmt 3 dt,
+                                      "): FAIL -- ",
+                                      msg,
+                                      "\\n"])
+   | (TestException e) => print (concat ["\nwlinkedidentc{Test}{NW4EbhvV-4YRS1G-1} ",
+                                         name,
+                                         " (",
+                                         Time.fmt 3 dt,
+                                         "): UNHANDLED EXCEPTION ",
+                                         exnMessage e,
+                                         "\\n"]))
+\nwused{\\{NW4EbhvV-21Krqt-1}}\nwidentuses{\\{{\nwixident{Test}}{Test}}}\nwindexuse{\nwixident{Test}}{Test}{NW4EbhvV-EoKaK-1}\nwendcode{}\nwbegindocs{18}\nwdocspar
+
+
+\section{Test and Suite Functions}
+
+We can now introduce helper functions to make implementing unit tests
+easier. The programmer is intended to write unit tests in separate
+files, each file containing exactly one suite.
+
+The basic idea is that the programmer will just define the current
+suite, then write down unit tests to be accumulated in the suite. For
+example:
+\begin{sml}
+suite "FooBarTests";
+
+test "BaazTest1" fn () => (* ... *);
+
+test "BaazTest2" fn () => (* ... *);
+
+(* etc. *)
+\end{sml}
+Towards that end, we will track the tests being defined in the current
+suite, and append the suite in the collection of all suites.
+
+Ideally, this would be done using some mutable dictionary construction,
+but we will just use a list. There might be two suites sharing the same
+name (which should be collapsed and merged together), but we will just
+accept duplicate suites as a sad fact of life rather than a bug that
+must be fixed.
+
+\nwenddocs{}\nwbegincode{19}\sublabel{NW4EbhvV-1C3sOO-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-1C3sOO-1}}}\moddef{Test suite DSL code~{\nwtagstyle{}\subpageref{NW4EbhvV-1C3sOO-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-kKwlF-1}}\nwenddeflinemarkup
+val \nwlinkedidentc{current_suite}{NW4EbhvV-1C3sOO-1} : (string*(\nwlinkedidentc{Test}{NW4EbhvV-4YRS1G-1} list)) ref = ref ("", []);
+val \nwlinkedidentc{all_suites}{NW4EbhvV-1C3sOO-1} : (\nwlinkedidentc{Test}{NW4EbhvV-4YRS1G-1} list) ref = ref [];
+
+\LA{}Append the current suite to all test suites~{\nwtagstyle{}\subpageref{NW4EbhvV-CI46F-1}}\RA{}
+  
+\LA{}Start a new test suite~{\nwtagstyle{}\subpageref{NW4EbhvV-q8fSD-1}}\RA{}
+  
+\LA{}Construct a new test case~{\nwtagstyle{}\subpageref{NW4EbhvV-4ZJPeu-1}}\RA{}
+\nwindexdefn{\nwixident{current{\_}suite}}{current:unsuite}{NW4EbhvV-1C3sOO-1}\nwindexdefn{\nwixident{all{\_}suites}}{all:unsuites}{NW4EbhvV-1C3sOO-1}\eatline
+\nwused{\\{NW4EbhvV-kKwlF-1}}\nwidentdefs{\\{{\nwixident{all{\_}suites}}{all:unsuites}}\\{{\nwixident{current{\_}suite}}{current:unsuite}}}\nwidentuses{\\{{\nwixident{Test}}{Test}}}\nwindexuse{\nwixident{Test}}{Test}{NW4EbhvV-1C3sOO-1}\nwendcode{}\nwbegindocs{20}\nwdocspar
+We will prepend the current suite to the collection of all test
+suites. This will also initialize an empty list of tests and an
+empty-named suite.
+
+\nwenddocs{}\nwbegincode{21}\sublabel{NW4EbhvV-CI46F-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-CI46F-1}}}\moddef{Append the current suite to all test suites~{\nwtagstyle{}\subpageref{NW4EbhvV-CI46F-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-1C3sOO-1}}\nwenddeflinemarkup
+fun \nwlinkedidentc{append_suite}{NW4EbhvV-CI46F-1} unit =
+    let
+        val (name, tests) = !\nwlinkedidentc{current_suite}{NW4EbhvV-1C3sOO-1}
+    in
+        \nwlinkedidentc{all_suites}{NW4EbhvV-1C3sOO-1} := (\nwlinkedidentc{TestSuite}{NW4EbhvV-4YRS1G-1} (name, tests)) :: (!\nwlinkedidentc{all_suites}{NW4EbhvV-1C3sOO-1});
+        \nwlinkedidentc{current_suite}{NW4EbhvV-1C3sOO-1} := ("", [])
+    end;
+\nwindexdefn{\nwixident{append{\_}suite}}{append:unsuite}{NW4EbhvV-CI46F-1}\eatline
+\nwused{\\{NW4EbhvV-1C3sOO-1}}\nwidentdefs{\\{{\nwixident{append{\_}suite}}{append:unsuite}}}\nwidentuses{\\{{\nwixident{all{\_}suites}}{all:unsuites}}\\{{\nwixident{current{\_}suite}}{current:unsuite}}\\{{\nwixident{TestSuite}}{TestSuite}}}\nwindexuse{\nwixident{all{\_}suites}}{all:unsuites}{NW4EbhvV-CI46F-1}\nwindexuse{\nwixident{current{\_}suite}}{current:unsuite}{NW4EbhvV-CI46F-1}\nwindexuse{\nwixident{TestSuite}}{TestSuite}{NW4EbhvV-CI46F-1}\nwendcode{}\nwbegindocs{22}\nwdocspar
+Then the domain-specific code for starting a test suite just amounts to
+calling {\Tt{}\nwlinkedidentq{append{\_}suite}{NW4EbhvV-CI46F-1}\nwendquote}, but updating the {\Tt{}\nwlinkedidentq{current{\_}suite}{NW4EbhvV-1C3sOO-1}\nwendquote} to have the
+given {\Tt{}name\nwendquote} argument.
+
+\nwenddocs{}\nwbegincode{23}\sublabel{NW4EbhvV-q8fSD-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-q8fSD-1}}}\moddef{Start a new test suite~{\nwtagstyle{}\subpageref{NW4EbhvV-q8fSD-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-1C3sOO-1}}\nwenddeflinemarkup
+fun \nwlinkedidentc{suite}{NW4EbhvV-q8fSD-1} (name : string) = (
+    \nwlinkedidentc{append_suite}{NW4EbhvV-CI46F-1}(name);
+    \nwlinkedidentc{current_suite}{NW4EbhvV-1C3sOO-1} := (name, []);
+);
+\nwindexdefn{\nwixident{suite}}{suite}{NW4EbhvV-q8fSD-1}\eatline
+\nwused{\\{NW4EbhvV-1C3sOO-1}}\nwidentdefs{\\{{\nwixident{suite}}{suite}}}\nwidentuses{\\{{\nwixident{append{\_}suite}}{append:unsuite}}\\{{\nwixident{current{\_}suite}}{current:unsuite}}}\nwindexuse{\nwixident{append{\_}suite}}{append:unsuite}{NW4EbhvV-q8fSD-1}\nwindexuse{\nwixident{current{\_}suite}}{current:unsuite}{NW4EbhvV-q8fSD-1}\nwendcode{}\nwbegindocs{24}\nwdocspar
+Defining a test case will be domain-specific code to add the test to the
+current test suite.
+
+\nwenddocs{}\nwbegincode{25}\sublabel{NW4EbhvV-4ZJPeu-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW4EbhvV-4ZJPeu-1}}}\moddef{Construct a new test case~{\nwtagstyle{}\subpageref{NW4EbhvV-4ZJPeu-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW4EbhvV-1C3sOO-1}}\nwenddeflinemarkup
+fun \nwlinkedidentc{test}{NW4EbhvV-4ZJPeu-1} (name : string) (assertion : unit -> unit) : unit =
+    let
+        val (suite_name, tests) = !\nwlinkedidentc{current_suite}{NW4EbhvV-1C3sOO-1}
+    in
+        \nwlinkedidentc{current_suite}{NW4EbhvV-1C3sOO-1} := (suite_name, (\nwlinkedidentc{TestCase}{NW4EbhvV-4YRS1G-1} (name, assertion))::tests)
+    end;
+\nwindexdefn{\nwixident{test}}{test}{NW4EbhvV-4ZJPeu-1}\eatline
+
+\nwused{\\{NW4EbhvV-1C3sOO-1}}\nwidentdefs{\\{{\nwixident{test}}{test}}}\nwidentuses{\\{{\nwixident{current{\_}suite}}{current:unsuite}}\\{{\nwixident{TestCase}}{TestCase}}}\nwindexuse{\nwixident{current{\_}suite}}{current:unsuite}{NW4EbhvV-4ZJPeu-1}\nwindexuse{\nwixident{TestCase}}{TestCase}{NW4EbhvV-4ZJPeu-1}\nwendcode{}
+
+\nwixlogsorted{c}{{Append the current suite to all test suites}{NW4EbhvV-CI46F-1}{\nwixu{NW4EbhvV-1C3sOO-1}\nwixd{NW4EbhvV-CI46F-1}}}%
+\nwixlogsorted{c}{{Composite test data pattern}{NW4EbhvV-4YRS1G-1}{\nwixu{NW4EbhvV-kKwlF-1}\nwixd{NW4EbhvV-4YRS1G-1}}}%
+\nwixlogsorted{c}{{Construct a new test case}{NW4EbhvV-4ZJPeu-1}{\nwixu{NW4EbhvV-1C3sOO-1}\nwixd{NW4EbhvV-4ZJPeu-1}}}%
+\nwixlogsorted{c}{{Define \code{}assert\edoc{}}{NW4EbhvV-2iEgXD-1}{\nwixu{NW4EbhvV-kKwlF-1}\nwixd{NW4EbhvV-2iEgXD-1}}}%
+\nwixlogsorted{c}{{Define test result data type}{NW4EbhvV-4L7MKl-1}{\nwixu{NW4EbhvV-kKwlF-1}\nwixd{NW4EbhvV-4L7MKl-1}}}%
+\nwixlogsorted{c}{{Print test results to the terminal}{NW4EbhvV-21Krqt-1}{\nwixu{NW4EbhvV-kKwlF-1}\nwixd{NW4EbhvV-21Krqt-1}}}%
+\nwixlogsorted{c}{{Print the result for a test case to the terminal}{NW4EbhvV-EoKaK-1}{\nwixu{NW4EbhvV-21Krqt-1}\nwixd{NW4EbhvV-EoKaK-1}}}%
+\nwixlogsorted{c}{{Run a test suite}{NW4EbhvV-47ZbGR-1}{\nwixu{NW4EbhvV-GInkH-1}\nwixd{NW4EbhvV-47ZbGR-1}}}%
+\nwixlogsorted{c}{{Run an individual unit test}{NW4EbhvV-3DPdJC-1}{\nwixu{NW4EbhvV-GInkH-1}\nwixd{NW4EbhvV-3DPdJC-1}}}%
+\nwixlogsorted{c}{{Run tests and produce results}{NW4EbhvV-GInkH-1}{\nwixu{NW4EbhvV-kKwlF-1}\nwixd{NW4EbhvV-GInkH-1}}}%
+\nwixlogsorted{c}{{Start a new test suite}{NW4EbhvV-q8fSD-1}{\nwixu{NW4EbhvV-1C3sOO-1}\nwixd{NW4EbhvV-q8fSD-1}}}%
+\nwixlogsorted{c}{{Test suite DSL code}{NW4EbhvV-1C3sOO-1}{\nwixu{NW4EbhvV-kKwlF-1}\nwixd{NW4EbhvV-1C3sOO-1}}}%
+\nwixlogsorted{c}{{xunit.sml}{NW4EbhvV-kKwlF-1}{\nwixd{NW4EbhvV-kKwlF-1}}}%
+\nwixlogsorted{i}{{\nwixident{all{\_}suites}}{all:unsuites}}%
+\nwixlogsorted{i}{{\nwixident{append{\_}suite}}{append:unsuite}}%
+\nwixlogsorted{i}{{\nwixident{assert}}{assert}}%
+\nwixlogsorted{i}{{\nwixident{AssertionFailure}}{AssertionFailure}}%
+\nwixlogsorted{i}{{\nwixident{current{\_}suite}}{current:unsuite}}%
+\nwixlogsorted{i}{{\nwixident{report{\_}results}}{report:unresults}}%
+\nwixlogsorted{i}{{\nwixident{ResultCase}}{ResultCase}}%
+\nwixlogsorted{i}{{\nwixident{ResultSuite}}{ResultSuite}}%
+\nwixlogsorted{i}{{\nwixident{run{\_}test}}{run:untest}}%
+\nwixlogsorted{i}{{\nwixident{suite}}{suite}}%
+\nwixlogsorted{i}{{\nwixident{Test}}{Test}}%
+\nwixlogsorted{i}{{\nwixident{test}}{test}}%
+\nwixlogsorted{i}{{\nwixident{TestCase}}{TestCase}}%
+\nwixlogsorted{i}{{\nwixident{TestOutcome}}{TestOutcome}}%
+\nwixlogsorted{i}{{\nwixident{TestResult}}{TestResult}}%
+\nwixlogsorted{i}{{\nwixident{TestSuite}}{TestSuite}}%
+

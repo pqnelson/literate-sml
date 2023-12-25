@@ -1,0 +1,11 @@
+*~
+# LaTeX outputs
+*.pdf
+*.aux
+*.toc
+*.log
+*.out
+
+# Noweb outputs
+*.idx
+*.defs

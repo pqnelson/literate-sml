@@ -1,0 +1,284 @@
+\NeedsTeXFormat{LaTeX2e}[1994/06/01]
+\ProvidesPackage{macros}[2021/12/11 Mizar Tutorial Macros Package]
+
+\newif\ifamsart\amsartfalse
+\newif\ifamscls
+\amsclsfalse
+\@ifclassloaded{amsproc}{
+  \amsclstrue
+}{}
+\@ifclassloaded{amsbook}{
+  \amsclstrue
+}{}
+\@ifclassloaded{amsart}{
+  \amsclstrue
+  \amsarttrue
+}{}
+
+\RequirePackage{epigraph}
+\RequirePackage{manfnt}
+\RequirePackage{proof}
+% \RequirePackage{ssqquote}
+\RequirePackage{upquote}
+\RequirePackage{enumitem}
+\setlist{nosep}
+\RequirePackage{datetime} % for \pdftime
+\RequirePackage{datetime2}
+\RequirePackage{amssymb,amsmath}
+\RequirePackage{amsthm}
+\RequirePackage{bm}
+\RequirePackage[dvipsnames,HTML]{xcolor}
+%\RequirePackage[inner=6pc,outer=6pc,bottom=6pc,top=6pc,headheight=13.6pt]{geometry}
+%\RequirePackage[inner=6pc,bottom=6pc,top=6pc,headheight=13.6pt]{geometry}
+\ifamscls
+  \ifamsart\newcommand\indexchap{\relax}\fi
+  \RequirePackage{amsmidx}
+  %\fi
+\else
+  \RequirePackage{makeidx}
+  \RequirePackage{titlesec}
+  \RequirePackage[nottoc,notlot,notlof]{tocbibind}
+\fi
+\RequirePackage{ifpdf}
+\RequirePackage[\ifpdf\else dvipdfmx\fi]{hyperref}
+
+% eTeX uses this color for links, it's better than BrickRed imho
+\definecolor{linkRed}{cmyk}{0.28, 1, 1, 0.35}
+\hypersetup{colorlinks=true,
+    linkcolor=linkRed,
+    citecolor=linkRed,
+    filecolor=linkRed,
+    urlcolor=linkRed
+  %%   pdfinfo={
+  %%     Title={Formalizing Finite Groups in Mizar},
+  %%     Author={Alex Nelson},
+  %%     CreationDate={D:20211214152256},
+  %%     ModDate={D:\pdfdate}
+  %% }
+}
+
+%%% Format author stuff nicely
+%%%
+\ifamscls
+  \makeindex{driver}
+  \makeindex{mizar}
+  \makeindex{mizar}
+    \global\let\ams@index\index
+    \gdef\mizindex#1{\ams@index{mizar}{#1}}
+    \gdef\index#1{\ams@index{driver}{#1}}
+    \gdef\printindices{\Printindex{driver}{Index}
+      \Printindex{mizar}{Mizar Index}}
+\else
+  \gdef\mizindex#1{\index{#1}}
+  \makeindex
+  \gdef\printindices{\printindex}
+\fi
+\noweboptions{longxref,english,breakcode,externalindex,smallcode}
+
+% This should be evaluated \emph{once}.
+\xdef\compiledTimestamp{Compiled:~\DTMnow}
+
+\ifamscls
+\else
+  % based on Knuth's taocpmac.tex
+  \titleformat{\section}
+    {\large\sffamily\bfseries}
+    {\thesection}
+    {1em}
+    {}
+
+  \titleformat{\subsection}
+    {\large\sffamily\bfseries}
+    {\thesubsection}
+    {1em}
+    {}
+
+  \titleformat{\subsubsection}
+    {\large\sffamily\bfseries}
+    {\thesubsubsection}
+    {1em}
+    {}
+\fi
+
+
+\ifamscls
+  \newcommand\preface{\chapter*{Preface}}
+\else
+  \newcommand\preface{\chapter{Preface}}
+\fi
+
+% Poor man's chunks, \'a la Knuth's WEB
+\counterwithout*{paragraph}{subsubsection}
+\@addtoreset{paragraph}{chapter}
+\renewcommand\theparagraph{\thechapter.\arabic{paragraph}}
+\renewcommand\paragraph[2][\@empty]{\par\medskip%\medbreak
+  \refstepcounter{paragraph}%
+  \def\tmp{#2}%
+  \noindent\textbf{\theparagraph.\ifx\tmp\@empty\else~#2\@addpunct{.}\fi}\enspace\ignorespaces}
+%\let\N\paragraph
+%\def\M{\paragraph{}}
+
+
+\setcounter{secnumdepth}{10}
+\setcounter{tocdepth}{1}
+\newskip\interchunkskip \interchunkskip=\medskipamount%
+% cwebmac.tex has \interchunkskip=12pt minus 3pt
+% latex.ltx and plain.tex has \medskipamount=6pt plus 2pt minus 2pt
+% \newskip\thmskip \thmskip=\interchunkskip%\topsep
+
+% theorems
+%\swapnumbers
+
+
+\ifamsart
+  \numberwithin{equation}{section}
+\else
+  \numberwithin{section}{chapter}
+  \numberwithin{equation}{chapter}
+\fi
+
+\def\th@remarkstyle{%
+  \thm@headfont{\scshape}%
+  \textrm % body font
+}
+% \theoremstyle{theoremstyle}
+\newif\ifusemizarnumbers
+\usemizarnumberstrue
+
+\newtheorem{todo}{To-Do Item}
+\ifusemizarnumbers
+  \ifamsart
+    \newcounter{chapter}\refstepcounter{chapter}
+  \fi
+  % Mizar's numbering system
+  \newtheorem{theorem}{Theorem}[chapter]               % counter 1
+  \newtheorem{corollary}[theorem]{Corollary}           % counter 1
+  \newtheorem{lemma}{Lemma}[chapter]                   % counter 2
+  \newtheorem{proposition}{Proposition}[chapter]       % counter 3
+  \newtheorem{exercise}[proposition]{Exercise}         % counter 3
+  \newtheorem{scheme}{Scheme}[chapter]                 % counter 5
+
+  \theoremstyle{definition}
+  \newtheorem{example}[proposition]{Example}           % counter 3
+  \newtheorem{registration}[proposition]{Registration} % counter 3
+  \newtheorem{reserve}[proposition]{Reserve}           % counter 3
+  \newtheorem{voc}[proposition]{Vocabulary}            % counter 3
+  \newtheorem{definition}{Definition}[chapter]         % counter 4
+  \newtheorem{definition*}[proposition]{Abbreviation}  % counter 3
+  \newtheorem{redefinition}[definition]{Redefinition}  % counter 4
+  \newtheorem{redefinition*}[proposition]{Redefinition*} % counter 3
+  \newtheorem{road-map}[proposition]{Road Map}
+
+  \theoremstyle{remark}
+  \newtheorem{note}[proposition]{Note}                 % counter 3
+  \newtheorem{notation}[proposition]{Notation}         % counter 3
+  \newtheorem{idiom}[proposition]{Idiom}               % counter 3
+  \newtheorem{aside}[proposition]{Aside}               % counter 3
+  \newtheorem{remark}{Remark}[proposition]
+  \newtheorem{def-remark}{Remark}[definition]
+  \newtheorem{thm-remark}{Remark}[theorem]
+  \newtheorem{lem-remark}{Remark}[lemma]
+  \newtheorem{sch-remark}{Remark}[scheme]
+\else
+  % my personal numbering system
+  \newtheorem{theorem}{Theorem}[chapter]
+  \newtheorem{corollary}[theorem]{Corollary}
+  \newtheorem{proposition}[theorem]{Proposition}
+  \newtheorem{lemma}[theorem]{Lemma}
+  \newtheorem{exercise}[theorem]{Exercise}
+
+  \theoremstyle{remark}
+  \newtheorem{remark}{Remark}[theorem]
+  \newtheorem{def-remark}{Remark}[theorem]
+  \newtheorem{thm-remark}{Remark}[theorem]
+  \newtheorem{lem-remark}{Remark}[theorem]
+  \newtheorem{note}[theorem]{Note}
+  \newtheorem{idiom}[theorem]{Idiom}
+  \newtheorem{aside}[theorem]{Aside}
+
+  \theoremstyle{definition}
+  \newtheorem{definition}[theorem]{Definition}
+  \newtheorem{definition*}[theorem]{Abbreviation}
+  \newtheorem{redefinition*}[theorem]{Redefinition*}
+  \newtheorem{redefinition}[theorem]{Redefinition}
+  \newtheorem{example}[theorem]{Example}
+  \newtheorem{registration}[theorem]{Registration}
+  \newtheorem{reserve}[theorem]{Reserve}
+  \newtheorem{voc}[remark]{Vocabulary}
+\fi
+
+
+%%% Dangerous bend environments
+\font\manual=manfnt
+\def\dbend{{\manual\char127}} % dangerous bend sign
+
+% Danger, Will Robinson!
+\newenvironment{danger}{\medbreak\noindent\hangindent=2pc\hangafter=-2%
+  \clubpenalty=10000%
+  \hbox to0pt{\hskip-\hangindent\dbend\hfill}\small\ignorespaces}%
+  {\medbreak\par}
+
+% Danger! Danger!
+\newenvironment{ddanger}{\medbreak\noindent\hangindent=3pc\hangafter=-2%
+  \clubpenalty=10000%
+  \hbox to0pt{\hskip-\hangindent\dbend\kern2pt\dbend\hfill}\small\ignorespaces}%
+  {\medbreak\par}
+
+% adjust whitespace between code chunks
+% https://www.cs.tufts.edu/~nr/noweb/FAQ.html
+\def\nwendcode{\endtrivlist \endgroup}
+\let\nwdocspar=\bigbreak%\smallbreak
+%\nwcodecommentsep=-10pt
+
+% avoid making the page numbers reset in mainmatter
+% https://tex.stackexchange.com/a/61473/14751
+\def\pagenumbering#1{%
+  %\global\c@page \@ne
+  \gdef\thepage{\csname @#1\endcsname
+   \c@page}}
+
+\newcommand\define[1]{\textbf{``#1''}}
+\newcommand{\Caret}{\char`\^}
+
+\usepackage{notation}
+
+% \MizTh{GROUP\_3}{55} produces an index entry for {GROUP_3!Th 55}
+% \MizTh{GROUP\_3}[03]{3} produces \index{GROUP_3!Th 03@\texttt{Th 3}}
+% \MizTh[GROUP\_03]{GROUP\_3}[03]{3} produces \index{GROUP_03@GROUP_3!Th 03@\texttt{Th 3}}
+\def\MizTh{\@ifnextchar[{\MizThm@i@with}{\MizThm@i@without}}
+\def\MizThm@i@with[#1]#2{\def\tempa{#1}\def\tempb{#2}\futurelet\next\MizThm@with@ii}
+\def\MizThm@with@ii{\@ifnextchar[{\MizThm@with@with}{\MizThm@with@without}}
+\def\MizThm@with@without#1{\mizindex{$\mathtt{\tempa}$@$\mathtt{\tempb}$!Th #1@\texttt{Th #1}}}
+\def\MizThm@with@with[#1]#2{\mizindex{$\mathtt{\tempa}$@$\mathtt{\tempb}$!Th #1@\texttt{Th #2}}}
+
+\def\MizThm@i@without#1{\def\tempa{#1}\futurelet\next\MizThm@without@ii}% Save first argument
+\def\MizThm@without@ii{\@ifnextchar[{\MizThm@without@with}{\MizThm@without@without}}
+\def\MizThm@without@without#1{\mizindex{$\mathtt{\tempa}$!Th #1@\texttt{Th #1}}}
+\def\MizThm@without@with[#1]#2{\mizindex{$\mathtt{\tempa}$!Th #1@\texttt{Th #2}}}
+\let\MizThm\MizTh
+
+\def\MizDef#1{\def\tempa{#1}\futurelet\next\MizDef@i}% Save first argument
+\def\MizDef@i{\@ifnextchar[{\MizDef@with}{\MizDef@without}}
+\def\MizDef@without#1{\mizindex{$\mathtt{\tempa}$!def #1@\texttt{def #1}}}
+\def\MizDef@with[#1]#2{\mizindex{$\mathtt{\tempa}$!def #1@\texttt{def #2}}}
+
+
+%%%% Mizar bibliography
+%\newcites{mml}{MML Bibliography}
+%\def\mml{\citemml}
+
+%% \def\mmlArticleStyle#1{\texttt{\scshape #1}}
+%% \let\oldcitemml\citemml
+
+%% \renewcommand\citemml[2][\@empty]{\bgroup
+%%   \def\citeform##1{\mmlArticleStyle{##1}}% hack #1 use custom style
+%%   \def\@cite##1##2{{% hack #2: treat \citemml[def 3]{foo} as foo:def 3
+%%       \@citestyle[\citeform{##1}\if@tempswa\texttt{:##2}\fi]}}%
+%%   \ifx#1\@empty\oldcitemml{#2}\else\oldcitemml[#1]{#2}\fi%
+%%   \egroup}
+
+
+\ifamsart
+\newcommand\chapter[2][]{}
+\fi
+\endinput

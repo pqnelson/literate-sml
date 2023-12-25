@@ -1,0 +1,298 @@
+% -*- mode: poly-noweb; noweb-code-mode: sml-mode; -*-
+
+\chapter{Unit Testing}
+
+As we program, it is useful to write down ``companion code'' which gives
+example uses of what we're trying to implement. This can be used to
+\emph{test} the code we're implementing, to make sure we're ``doing what
+we think we're doing''. Before we get to the matter of \emph{how to
+write unit tests}, we first need a way to write unit tests (which
+programmers call a ``unit-testing framework'').
+
+We begin by implementing a unit-testing framework. This requires having
+an [[assert : string -> bool -> unit]] function to check if something
+has worked as expected (the second parameter will be [[true]] upon success).
+Failure raises a new exception.
+
+We will organize tests into a composite pattern, consisting of
+individual assertions wrapped in a [[TestCase]] and a collection of
+tests bundled together in a [[TestSuite]].
+
+<<xunit.sml>>=
+<<Define [[assert]]>>
+<<Composite test data pattern>>
+<<Define test result data type>>
+<<Run tests and produce results>>
+<<Print test results to the terminal>>
+<<Test suite DSL code>>
+@
+
+We will want to write unit tests, organized into ``folders'' or
+\emph{test suites}. Each unit test contains one assertion, which checks
+that some condition is true. Some example of simple unit tests of
+arithmetic:
+
+\begin{sml}
+(* Signatures for the constructors of test suites and unit tests:
+  
+  suite : string -> Test list -> Test
+  test : string -> (unit -> unit) -> Test *)
+val ex_tests
+= suite "Arithmetic Tests"
+        [test "Arithmetic test 1" (fn () => assert "1+1=2" (1+1=2)),
+         test "Arithmetic test 2" (fn () => assert "1+1=3" (1+1=3))];
+\end{sml}
+
+The [[assert]] function takes a label (string) and a Boolean value,
+where ``true'' reflects the test does what we expect and ``fail''
+reflects\dots well, the test failed. Upon failure, we will raise an
+exception for the testing system to catch and interpret as a test failure.
+
+Although we could \emph{reuse} the [[Fail]] exception, this may also
+cause confusion if the code being tested raises a [[Fail]] exception to
+handle particular situations. This leads us to implement our own
+[[AssertionFailure]] exception. 
+
+<<Define [[assert]]>>=
+exception AssertionFailure of string;
+
+fun assert (msg : string) (is_success : bool) : unit =
+    if is_success then () else raise AssertionFailure msg;
+@ %def AssertionFailure assert
+
+We use a composite design pattern when implementing [[Test]]s. 
+
+Now, unit tests are [[TestCase]] instances. An individual test case will
+take a label (a [[string]]) and a delayed test procedure ([[unit -> unit]]).
+
+A collection of [[Test]] instances are collected in a [[TestSuite]].
+
+<<Composite test data pattern>>=
+datatype Test = TestCase of string*(unit -> unit)
+              | TestSuite of string*(Test list);
+@ %def Test TestCase TestSuite
+
+When we run unit tests, we either deal with a single assertion (a
+[[TestCase]]) or a sequence of tests. For now, we will not print
+any information concerning success: only failure or exceptions require
+the user's attention. We will give some pseuodocode intuition of what
+this would look like:
+
+\begin{sml}
+(* run : Test -> unit *)
+fun run (TestCase (name, assertion))
+    = (assertion()
+       handle AssertionFailure msg => print (concat ["Test ",
+                                                     name,
+                                                     " failed: ",
+                                                     msg])
+            | e => print (concat ["Unhandled exception in test",
+                                  name,
+                                  ": ",
+                                  exnMessage e]))
+  | run (TestSuite (name, tests)) = app run tests;
+\end{sml}
+
+We really want to have [[run]] produce a data structure storing the
+results of each test. Towards that end, we need a composite design
+pattern for the test results.
+
+An individual test can succeed, fail, or encounter an unhandled
+exception.
+
+The [[TestResult]] data type is then just a composite design pattern,
+whose nodes are just results of individual unit tests. We will store the
+amount of time it took to run the unit test (or test suite), the name of
+the unit test (or test) suite being executed, and the outcome(s).
+
+<<Define test result data type>>=
+(* Extend the framework to handle printing test outcomes. *)
+datatype TestOutcome = TestSuccess
+                     | TestFail of string
+                     | TestException of exn;
+
+datatype TestResult = ResultCase of string*Time.time*TestOutcome
+                    | ResultSuite of string*Time.time*(TestResult list);
+@ %def TestOutcome TestResult ResultCase ResultSuite
+
+Running unit tests will then produce a [[TestResult]] instance storing
+the germane information.
+
+<<Run tests and produce results>>=
+(* run_test : Test -> TestResult *)
+fun run_test (test : Test) : TestResult =
+let
+  val start = Time.now()
+in
+  case test of
+      <<Run an individual unit test>>
+    | <<Run a test suite>>
+end;
+@ %def run_test
+
+If the assertion runs as expected, we record a [[TestSuccess]] for the
+[[case_name]], along with how long it took.
+However, if an [[AssertionFailure]] is raised, then the test failed, and
+we record a failure for the [[case_name]].
+Worse, if any other exception occurs, we should record something
+exceptional has happened (and store the details of the exception raised).
+
+<<Run an individual unit test>>=
+(TestCase (case_name, assertion)) =>
+((assertion();
+  ResultCase (case_name, (Time.-)(Time.now(), start), TestSuccess))
+ handle AssertionFailure msg => ResultCase (case_name,
+                                            (Time.-)(Time.now(), start),
+                                            TestFail msg)
+      | e => ResultCase (case_name,
+                         (Time.-)(Time.now(), start),
+                         TestException e))
+@ 
+
+Running all the tests on a test suite amounts to iterating through each
+element in the suite, and running each element recursively. We use the
+fact that Standard ML is call-by-value to have [[results]] be computed
+first, and upon completion the elapsed time interval [[dt]] is determined.
+Thus a test suite's results will include the time it took to run every
+``descendent'' test contained within it.
+
+<<Run a test suite>>=
+(TestSuite (suite_name, tests)) =>
+(let
+    val results = map run_test tests
+    val dt = (Time.-)(Time.now(), start)
+in
+    ResultSuite (suite_name, dt, results)
+end)
+@
+
+We can then implement a Reporter, which will report and/or record
+information concerning the test results. For our purposes, we only need
+to print out to the screen the test results. Again, since we're
+processing a composite data pattern, we can implement this as two cases:
+one for the leafs in the collection, another for the test suites.
+
+Later it may be useful to store this information in a separate file
+(Java routinely uses XML files to store results from running unit
+tests).
+There are other possibilities, but for now we will just print the tests
+to the terminal.
+
+It has become conventional to report time intervals to microseconds. We
+do this with the following function. The [[Time.fmt]] will format the
+time interval to [[n]] digits after the decimal point, in units of seconds.
+
+<<Print test results to the terminal>>=
+(* Print the results to the terminal.
+
+    report_results : TestResult -> unit *)
+fun report_results (ResultCase (name,dt,outcome)) =
+    <<Print the result for a test case to the terminal>>
+  | report_results (ResultSuite (name,dt,outcomes)) =
+    (print (concat ["Suite ", name, " (", Time.fmt 3 dt, ")\n"]);
+     app report_results outcomes);
+@ %def report_results
+
+The outcome for an individual unit test is a success, failure, or an exception.
+Usually, we only care about failures, but it is good to know that a test
+has been executed.
+
+<<Print the result for a test case to the terminal>>=
+(case outcome of
+     TestSuccess => print (concat ["Test ",
+                                   name,
+                                   " (",
+                                   Time.fmt 3 dt,
+                                   ")",
+                                   ": SUCCESS\n"])
+   | (TestFail msg) => print (concat ["Test ",
+                                      name,
+                                      " (",
+                                      Time.fmt 3 dt,
+                                      "): FAIL -- ",
+                                      msg,
+                                      "\n"])
+   | (TestException e) => print (concat ["Test ",
+                                         name,
+                                         " (",
+                                         Time.fmt 3 dt,
+                                         "): UNHANDLED EXCEPTION ",
+                                         exnMessage e,
+                                         "\n"]))
+@ 
+
+
+\section{Test and Suite Functions}
+
+We can now introduce helper functions to make implementing unit tests
+easier. The programmer is intended to write unit tests in separate
+files, each file containing exactly one suite.
+
+The basic idea is that the programmer will just define the current
+suite, then write down unit tests to be accumulated in the suite. For
+example:
+\begin{sml}
+suite "FooBarTests";
+
+test "BaazTest1" fn () => (* ... *);
+
+test "BaazTest2" fn () => (* ... *);
+
+(* etc. *)
+\end{sml}
+Towards that end, we will track the tests being defined in the current
+suite, and append the suite in the collection of all suites.
+
+Ideally, this would be done using some mutable dictionary construction,
+but we will just use a list. There might be two suites sharing the same
+name (which should be collapsed and merged together), but we will just
+accept duplicate suites as a sad fact of life rather than a bug that
+must be fixed.
+
+<<Test suite DSL code>>=
+val current_suite : (string*(Test list)) ref = ref ("", []);
+val all_suites : (Test list) ref = ref [];
+
+<<Append the current suite to all test suites>>
+  
+<<Start a new test suite>>
+  
+<<Construct a new test case>>
+@ %def current_suite all_suites
+
+We will prepend the current suite to the collection of all test
+suites. This will also initialize an empty list of tests and an
+empty-named suite.
+
+<<Append the current suite to all test suites>>=
+fun append_suite unit =
+    let
+        val (name, tests) = !current_suite
+    in
+        all_suites := (TestSuite (name, tests)) :: (!all_suites);
+        current_suite := ("", [])
+    end;
+@ %def append_suite
+
+Then the domain-specific code for starting a test suite just amounts to
+calling [[append_suite]], but updating the [[current_suite]] to have the
+given [[name]] argument.
+
+<<Start a new test suite>>=
+fun suite (name : string) = (
+    append_suite(name);
+    current_suite := (name, []);
+);
+@ %def suite
+
+Defining a test case will be domain-specific code to add the test to the
+current test suite.
+
+<<Construct a new test case>>=
+fun test (name : string) (assertion : unit -> unit) : unit =
+    let
+        val (suite_name, tests) = !current_suite
+    in
+        current_suite := (suite_name, (TestCase (name, assertion))::tests)
+    end;
+@ %def test
